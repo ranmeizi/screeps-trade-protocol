@@ -43,7 +43,7 @@ type TradeTerminalMemory = {
     sendBuf?:string
 
     connection?:{
-        roomName:string
+        roomName:string,
     }
 }
 

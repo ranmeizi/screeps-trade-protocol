@@ -1,5 +1,30 @@
 const MEMORY_KEY = 'custom_market'
 
+/**
+ * 画图
+ * @param {Room} room 
+ * @param {any} data 
+ */
+function draw(room, data) {
+    function drawRow(row){
+        // 计算消耗
+
+        // 每条画出可选的交易区间
+    }
+    // 画出清单
+
+    for(let row of data){
+        drawRow(row)
+    }
+}
+
+/**
+ * 计算能量消耗
+ */
+function calc() {
+
+}
+
 function checkMemory() {
     if (!Memory[MEMORY_KEY]) {
         Memory[MEMORY_KEY] = {
@@ -11,6 +36,7 @@ function checkMemory() {
 }
 
 /**
+ * 最新的几条message
  * @type {(Transaction&{description:Record<string,any>})[]}
  */
 let letestMessage = []
@@ -89,16 +115,21 @@ function transStatus(memory, status) {
 const handlers = {
     LISTEN(trade) {
         // 等待交易单信息
-        for (let transaction of letestMessage) {
+        for (let i = 0; i < letestMessage.length; i++) {
+            const transaction = letestMessage[i]
             if (!trade.memory.connection.roomName && transaction.to === trade.terminal.room.name) {
                 if (transaction.description.t === 'conn') {
                     const resource = transaction.description.r
 
                     // 发送 rules 列表
-                    // send
+                    if (trade.sendRules(resource)) {
+                        // 消费掉
+                        letestMessage.splice(i, 1)
+                        // 改变状态为 WAIT_SEND
+                        transStatus(trade.memory, 'WAIT_SEND')
+                    }
 
-                    // 改变状态为 WAIT_SEND
-                    transStatus(trade.memory,'WAIT_SEND')
+
                 }
             }
         }
@@ -111,35 +142,43 @@ const handlers = {
                     const data = transaction.description.d
 
                     // 画图
-                    // draw
+                    draw(Game.rooms[trade.terminal.room.name], data)
 
                     // 改变状态为 WAIT_TRADE
-                    transStatus(trade.memory,'WAIT_TRADE')
+                    transStatus(trade.memory, 'WAIT_TRADE')
+                    break;
                 }
             }
         }
     },
     WAIT_TRADE(trade) {
         // 检查 sendBuf 有没有内容
-        if(trade.memory.sendBuf){
+        if (trade.memory.sendBuf) {
             // 发送
-            // send
+            if(trade.doSendResource()){
 
-            transStatus(trade.memory,'WAIT_RECIEVE')
+                // 删除buf
+                trade.memory.sendBuf = undefined
+
+                // 改变状态为 WAIT_RECIEVE
+                transStatus(trade.memory, 'WAIT_RECIEVE')
+            } 
         }
     },
     WAIT_SEND(trade) {
-         // 等待交易单信息中的 list 数据 画图
-         for (let transaction of letestMessage) {
+        // 等待交易单信息中的 list 数据 画图
+        for (let i = 0; i < letestMessage.length; i++) {
+            const transaction = letestMessage[i]
             if (trade.memory.connection.roomName === transaction.from && transaction.to === trade.terminal.room.name) {
-                if (transaction.description.t === 'list') {
-                    const data = transaction.description.d
+                if (transaction.description.t === 'trade_send') {
 
                     // 发资源吧
-                    // draw
+                    if (trade.doRecieveResource()) {
 
-                    // 改变状态为 
-                    transStatus(trade.memory,'COMPLETE')
+                        // 改变状态为 
+                        transStatus(trade.memory, 'COMPLETE')
+                        break;
+                    }
                 }
             }
         }
@@ -148,22 +187,19 @@ const handlers = {
         // 等待交易单信息中的 list 数据 画图
         for (let transaction of letestMessage) {
             if (trade.memory.connection.roomName === transaction.from && transaction.to === trade.terminal.room.name) {
-                if (transaction.description.t === 'list') {
-                    const data = transaction.description.d
-
-                    // 发资源吧
-                    // draw
+                if (transaction.description.t === 'trade_recieve') {
+                    // 检查一下资源，是不是要报警
 
                     // 改变状态为 COMPLETE
-                    transStatus(trade.memory,'COMPLETE')
+                    transStatus(trade.memory, 'COMPLETE')
                 }
             }
         }
     },
     COMPLETE(trade) {
         // 收尾
-
-        transStatus(trade.memory,'LISTEN')
+        trade.memory.connection=undefined
+        transStatus(trade.memory, 'LISTEN')
     }
 }
 
@@ -193,18 +229,65 @@ class TradeTerminal {
      * 创建连接
      */
     connect(roomName) {
+        this.terminal.send(RESOURCE_ENERGY, 1, roomName, JSON.stringify({
 
+        }))
     }
 
     /**
-     * 
+     * 开始交易
      */
-    trade() {
+    trade(id, amount) {
         if (this.memory.status === 'WAIT_TRADE') {
             // 发送
+            const message = {
+                t: 'trade_send',
+                id: id
+            }
+            this.memory.sendBuf = JSON.stringify(message)
         } else {
             // 你在干森么？
         }
+    }
+
+    /**
+     * 注意 description 最多100字符
+     * 
+     * 多了是筛选掉嘛？
+     */
+    sendRules(resourceType) {
+        const roomName = this.memory.connection.roomName
+        const resourceRules = this.memory.rules.filter(item => item.type === resourceType)
+
+        const message = {
+            t: 'list',
+            d: resourceRules.map(item => ({
+                id: item.id,
+                r: item.raito,
+            }))
+        }
+
+        const res = this.terminal.send(RESOURCE_ENERGY, 1, roomName, JSON.stringify(message))
+
+        return res === OK
+    }
+
+    // TODO
+    doSendResource() {
+        const roomName = this.memory.connection.roomName
+        const sendBuf = this.memory.sendBuf
+        const res = this.terminal.send(RESOURCE_ENERGY, 1, roomName, sendBuf)
+
+        return res === OK
+    }
+
+    // TODO
+    doRecieveResource() {
+        const roomName = this.memory.connection.roomName
+        
+        const res = this.terminal.send(RESOURCE_ENERGY, 1, roomName)
+
+        return res === OK
     }
 }
 
