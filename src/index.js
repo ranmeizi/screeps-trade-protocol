@@ -52,6 +52,10 @@ function checkMemory() {
     }
 }
 
+function createContract(rule){
+
+}
+
 /**
  * 最新的几条message
  * @type {(Transaction&{description:Record<string,any>})[]}
@@ -298,6 +302,8 @@ class TradeTerminal {
     doSendResource() {
         const roomName = this.memory.connection.roomName
         const sendBuf = this.memory.sendBuf
+
+        // 翻 rules
         const res = this.terminal.send(RESOURCE_ENERGY, 1, roomName, sendBuf)
 
         return res === OK
@@ -307,6 +313,7 @@ class TradeTerminal {
     doRecieveResource() {
         const roomName = this.memory.connection.roomName
 
+        // 翻 rules
         const res = this.terminal.send(RESOURCE_ENERGY, 1, roomName)
 
         return res === OK

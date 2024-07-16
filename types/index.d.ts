@@ -23,6 +23,14 @@ type Rule = {
     raito: [string, number, string, number]
 }
 
+/** 交易合同 */
+type Contract = {
+    sendType: string,
+    sendAmount: number,
+    recieveType: string,
+    recieveAmount: number
+}
+
 type TradeTerminalMemory = {
     /**
      * 状态
@@ -44,6 +52,7 @@ type TradeTerminalMemory = {
 
     connection?: {
         roomName: string,
+        contract?: Contract
     }
 }
 
