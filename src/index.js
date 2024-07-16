@@ -6,14 +6,14 @@ const MEMORY_KEY = 'custom_market'
  * @param {any} data 
  */
 function draw(room, data) {
-    function drawRow(row){
+    function drawRow(row) {
         // 计算消耗
 
         // 每条画出可选的交易区间
     }
     // 画出清单
 
-    for(let row of data){
+    for (let row of data) {
         drawRow(row)
     }
 }
@@ -23,6 +23,23 @@ function draw(room, data) {
  */
 function calc() {
 
+}
+
+/**
+ * 
+ * @param {TradeTerminal} trade 
+ * @param {number} tickTimeout 
+ */
+function tradeFailTimer(trade, tickTimeout) {
+    if (trade.memory.status_tick + tickTimeout >= Game.time) {
+        // 结束
+        transStatus(trade.memory, 'FAIL')
+
+        return true
+    }
+
+
+    return false
 }
 
 function checkMemory() {
@@ -155,14 +172,14 @@ const handlers = {
         // 检查 sendBuf 有没有内容
         if (trade.memory.sendBuf) {
             // 发送
-            if(trade.doSendResource()){
+            if (trade.doSendResource()) {
 
                 // 删除buf
                 trade.memory.sendBuf = undefined
 
                 // 改变状态为 WAIT_RECIEVE
                 transStatus(trade.memory, 'WAIT_RECIEVE')
-            } 
+            }
         }
     },
     WAIT_SEND(trade) {
@@ -198,8 +215,13 @@ const handlers = {
     },
     COMPLETE(trade) {
         // 收尾
-        trade.memory.connection=undefined
+        trade.memory.connection = undefined
         transStatus(trade.memory, 'LISTEN')
+    },
+    FAIL(trade) {
+        // 报错
+        // 收尾
+        this.COMPLETE(trade)
     }
 }
 
@@ -284,7 +306,7 @@ class TradeTerminal {
     // TODO
     doRecieveResource() {
         const roomName = this.memory.connection.roomName
-        
+
         const res = this.terminal.send(RESOURCE_ENERGY, 1, roomName)
 
         return res === OK

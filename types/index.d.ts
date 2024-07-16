@@ -11,7 +11,7 @@ type Trade = {
 
 }
 
-type Status = 'LISTEN' | 'WAIT_LIST' | 'WAIT_TRADE' | 'WAIT_SEND' | 'WAIT_RECIEVE' | 'COMPLETE'
+type Status = 'LISTEN' | 'WAIT_LIST' | 'WAIT_TRADE' | 'WAIT_SEND' | 'WAIT_RECIEVE' | 'COMPLETE' | 'FAIL'
 
 type Rule = {
     id: '',
@@ -32,7 +32,7 @@ type TradeTerminalMemory = {
     /**
      * 状态改变tick
      */
-    status_tick:number
+    status_tick: number
     /**
      * 商品交换规则
      */
@@ -40,10 +40,10 @@ type TradeTerminalMemory = {
     /**
      * 发送缓冲区
      */
-    sendBuf?:string
+    sendBuf?: string
 
-    connection?:{
-        roomName:string,
+    connection?: {
+        roomName: string,
     }
 }
 
