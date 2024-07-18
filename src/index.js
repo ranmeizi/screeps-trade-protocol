@@ -1,21 +1,183 @@
 const MEMORY_KEY = 'custom_market'
 
+const test_d = {
+    t: RESOURCE_UTRIUM,
+    a: 2000,
+    r: [
+        { i: 1, r: [RESOURCE_UTRIUM, 1, RESOURCE_OXYGEN, 1] },
+        { i: 2, r: [RESOURCE_UTRIUM, 5, RESOURCE_HYDROGEN, 14] }
+    ]
+}
+const test_trade = {
+    memory: {
+        connection: {
+            roomName: 'W10N5'
+        }
+    },
+    terminal: {
+        room: {
+            name: 'W0N0'
+        }
+    }
+}
+
+global.test_log = () => {
+    // log(test_d)
+    draw(Game.rooms['W59S17'], test_d)
+}
+
+/**
+ * @typedef UIStyle
+ * @property {number} [marginTop] default=0
+ * @property {number} [marginRight] default=0
+ * @property {number} [marginBottom] default=0
+ * @property {number} [marginLeft] default=0
+ * @property {number} [height] default=0
+ * @property {number} [width] default=0
+ * @property {number} [fontSize] default=0
+ * @property {number} [lineHeight] default=1.5
+ */
+
+/**
+ * 获取块布局位置计算器 
+ * @param {UIStyle} style
+ * @returns 
+ */
+function getRenderBlockRoot({
+    marginTop = 0,
+    marginLeft = 0,
+    marginRight = 0,
+    marginBottom = 0
+}) {
+    let placeholder = {
+        x: marginLeft,
+        y: marginTop,
+        height: 0,
+        width: 0
+    }
+    return {
+        /**
+         * 设置一个 Box
+         * @param {UIStyle} style 
+         */
+        addBox({
+            marginTop = 0,
+            marginLeft = 0,
+            marginRight = 0,
+            marginBottom = 0,
+            height = 0,
+        }) {
+            const x = placeholder.x + marginLeft
+            const y = placeholder.y + placeholder.height + marginTop
+            placeholder.height += marginTop + height + marginBottom
+            return {
+                x,
+                y
+            }
+        },
+        /**
+         * 设置一个 Text
+         * @param {UIStyle} style 
+         */
+        addText({
+            marginTop = 0,
+            marginLeft = 0,
+            marginRight = 0,
+            marginBottom = 0,
+            fontSize = 0.8,
+            lineHeight = 1.5
+        }) {
+            const x = placeholder.x + marginLeft
+            const temp = fontSize * (lineHeight - 1)
+            const y = placeholder.y + placeholder.height + marginTop + temp
+
+            placeholder.height += marginTop + fontSize * lineHeight + marginBottom
+            return {
+                x,
+                y
+            }
+        }
+    }
+}
+
 /**
  * 画图
  * @param {Room} room 
- * @param {any} data 
+ * @param {WaresListDTO} data 
  */
 function draw(room, data) {
+    if (!data) {
+        return
+    }
+
+    function drawHeader() {
+        const header = renderTexts.header(test_trade, test_d)
+        root.addBox({ height: 1 })
+        for (const line of header) {
+            const fontSize = 0.8
+            const { x, y } = root.addText({ fontSize: fontSize, marginLeft: 1 })
+            room.visual.text(line, x, y, { color: 'black', font: fontSize, align: 'left',strokeWidth:0.5 });
+        }
+        const { x, y } = root.addBox({ height: 0.2 })
+
+        room.visual.line(x, y, x + 25, y, { color: 'black',width:0.2 });
+    }
+    function drawBody() {
+        // 画出清单
+        for (let row of data.r) {
+            drawRow(row)
+        }
+    }
+    function drawFooter() {
+
+    }
+
     function drawRow(row) {
         // 计算消耗
 
         // 每条画出可选的交易区间
     }
-    // 画出清单
 
-    for (let row of data) {
-        drawRow(row)
+    // 轮廓
+    room.visual.rect(3, 3, 25, 16, { fill: 'rgba(255,255,255,.5)' })
+
+    const root = getRenderBlockRoot({ marginTop: 3, marginLeft: 3 })
+
+    drawHeader()
+    drawBody()
+    drawFooter()
+}
+
+/**
+ * @type {Record<'header'|'body'|'footer',(trade:TradeTerminal,d:WaresListDTO)=>string[]>}
+ */
+const renderTexts = {
+    header(trade, d) {
+        return [
+            `${trade.memory.connection.roomName}'s wares trade rule about ${d.t}`,
+            `total ${d.t} : ${d.a}`
+        ]
+    },
+    body(trade, d) {
+        return d.r.map(r => `id:${r.i}  ${r.r[1]}${r.r[0]}=${r.r[3]}${r.r[2]}`)
+    },
+    footer(trade, d) {
+        return [
+            'Check this list and execute the script',
+            `TP.select(${trade.terminal.room.name}).trade(...)`,
+            `expire in 30 tick`
+        ]
     }
+}
+
+function log(data) {
+    const header = renderTexts.header(test_trade, test_d)
+    const body = renderTexts.body(test_trade, test_d)
+    const footer = renderTexts.footer(test_trade, test_d)
+
+    const text = header.concat(body).concat(footer).join('\n')
+
+    console.log(text)
 }
 
 /**
@@ -34,10 +196,9 @@ function tradeFailTimer(trade, tickTimeout) {
     if (trade.memory.status_tick + tickTimeout >= Game.time) {
         // 结束
         transStatus(trade.memory, 'FAIL')
-
+        // log timeout
         return true
     }
-
 
     return false
 }
@@ -52,7 +213,7 @@ function checkMemory() {
     }
 }
 
-function createContract(rule){
+function createContract(rule) {
 
 }
 
@@ -231,24 +392,31 @@ const handlers = {
 
 class TradeTerminal {
 
-    /**
-     * terminal
-     * @memberof TradeTerminal
-     * @type {StructureTerminal}
-     */
-    terminal
+    // /**
+    //  * terminal
+    //  * @memberof TradeTerminal
+    //  * @type {StructureTerminal}
+    //  */
+    // terminal
 
-    /**
-     * @memberof TradeTerminal
-     * @type {TradeTerminalMemory | undefined}
-     */
-    memory
+    // /**
+    //  * @memberof TradeTerminal
+    //  * @type {TradeTerminalMemory | undefined}
+    //  */
+    // memory
 
     constructor(roomName) {
         const { terminal, memory } = select(roomName)
 
         this.terminal = terminal
         this.memory = memory
+    }
+
+    setRules() {
+        // 判断是否交易中 TODO
+        if (1 === 1) {
+            return
+        }
     }
 
     /**
@@ -264,16 +432,17 @@ class TradeTerminal {
      * 开始交易
      */
     trade(id, amount) {
-        if (this.memory.status === 'WAIT_TRADE') {
-            // 发送
-            const message = {
-                t: 'trade_send',
-                id: id
-            }
-            this.memory.sendBuf = JSON.stringify(message)
-        } else {
+        if (this.memory.status !== 'WAIT_TRADE') {
             // 你在干森么？
+            return
         }
+
+        // 发送
+        const message = {
+            t: 'trade_send',
+            id: id
+        }
+        this.memory.sendBuf = JSON.stringify(message)
     }
 
     /**

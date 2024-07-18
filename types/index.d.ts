@@ -23,6 +23,27 @@ type Rule = {
     raito: [string, number, string, number]
 }
 
+type MessageTypes='list'|'trade_send'|'trade_recieve'
+
+type Message<T>={
+    t:MessageTypes,
+    d:T
+}
+
+type WaresListDTO={
+    /** type-资源类型 */
+    t:string
+    /** amount-资源数 */
+    a:number
+    /** rules-规则 */
+    r:{
+        /** id */
+        i:number,
+        /** raito */
+        r: [string, number, string, number]
+    }[]
+}
+
 /** 交易合同 */
 type Contract = {
     sendType: string,
