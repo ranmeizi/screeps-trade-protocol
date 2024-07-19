@@ -47,13 +47,15 @@ function getRenderBlockRoot({
     marginTop = 0,
     marginLeft = 0,
     marginRight = 0,
-    marginBottom = 0
+    marginBottom = 0,
+    height = 0,
+    width = 0
 }) {
     let placeholder = {
         x: marginLeft,
         y: marginTop,
-        height: 0,
-        width: 0
+        height: height,
+        width: width
     }
     return {
         /**
@@ -96,6 +98,9 @@ function getRenderBlockRoot({
                 x,
                 y
             }
+        },
+        getPlaceholder() {
+            return placeholder
         }
     }
 }
@@ -110,42 +115,54 @@ function draw(room, data) {
         return
     }
 
+    const draws = []
+
     function drawHeader() {
         const header = renderTexts.header(test_trade, test_d)
         root.addBox({ height: 1 })
         for (const line of header) {
-            const fontSize = 0.8
+            const fontSize = 1.2
             const { x, y } = root.addText({ fontSize: fontSize, marginLeft: 1 })
-            room.visual.text(line, x, y, { color: 'black', font: fontSize, align: 'left',strokeWidth:0.5 });
+            draws.push(() => room.visual.text(line, x, y, { color: 'black', font: fontSize, align: 'left', strokeWidth: 0.5 }))
         }
-        const { x, y } = root.addBox({ height: 0.2 })
+        const { x, y } = root.addBox({ height: 0.2, marginBottom: 0.5 })
 
-        room.visual.line(x, y, x + 25, y, { color: 'black',width:0.2 });
+        draws.push(() => room.visual.line(x, y, x + 25, y, { color: 'black', width: 0.2 }))
     }
     function drawBody() {
-        // 画出清单
-        for (let row of data.r) {
-            drawRow(row)
+        const body = renderTexts.body(test_trade, test_d)
+        root.addBox({ height: 1 })
+        for (const line of body) {
+            const fontSize = 1
+            const { x, y } = root.addText({ fontSize: fontSize, marginLeft: 1 })
+            draws.push(() => room.visual.text(line, x, y, { color: 'black', font: fontSize, align: 'left', strokeWidth: 0.5 }))
         }
+        root.addBox({ height: 2.5 })
     }
     function drawFooter() {
+        const footer = renderTexts.footer(test_trade, test_d)
 
-    }
-
-    function drawRow(row) {
-        // 计算消耗
-
-        // 每条画出可选的交易区间
+        for (const line of footer) {
+            const fontSize = 0.8
+            const { x, y } = root.addText({ fontSize: fontSize, marginLeft: 1 })
+            draws.push(() => room.visual.text(line, x, y, { color: 'black', font: fontSize, align: 'left', strokeWidth: 0.5 }))
+        }
+        root.addBox({ height: 1 })
     }
 
     // 轮廓
-    room.visual.rect(3, 3, 25, 16, { fill: 'rgba(255,255,255,.5)' })
 
-    const root = getRenderBlockRoot({ marginTop: 3, marginLeft: 3 })
+
+    const root = getRenderBlockRoot({ marginTop: 3, marginLeft: 3, width: 25 })
 
     drawHeader()
     drawBody()
     drawFooter()
+
+    const { x, y, height, width } = root.getPlaceholder()
+
+    room.visual.rect(x, y, width, height, { fill: 'rgb(255,255,255)' })
+    draws.forEach(d=>d())
 }
 
 /**
@@ -159,7 +176,7 @@ const renderTexts = {
         ]
     },
     body(trade, d) {
-        return d.r.map(r => `id:${r.i}  ${r.r[1]}${r.r[0]}=${r.r[3]}${r.r[2]}`)
+        return d.r.map(r => `id:${r.i}  ${r.r[1]} 【${r.r[0]}】 = ${r.r[3]} 【${r.r[2]}】   `)
     },
     footer(trade, d) {
         return [
@@ -183,9 +200,11 @@ function log(data) {
 /**
  * 计算能量消耗
  */
-function calc() {
+function calcEnergy() {
 
 }
+
+
 
 /**
  * 
