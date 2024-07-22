@@ -15,32 +15,47 @@ type Status = 'LISTEN' | 'WAIT_LIST' | 'WAIT_TRADE' | 'WAIT_SEND' | 'WAIT_RECIEV
 
 type Rule = {
     id: '',
-    type: string,
+    /** 商品类型 */
+    resourceType: ResourceConstant,
+    /** 交换物类型 */
+    exchangeResourceType: ResourceConstant,
     /**
-     * 每一定量商品需要的等价物数量
-     * 商品 type ， 数量 ，等价物 type ，数量
+     * 汇率
      */
-    raito: [string, number, string, number]
+    raito: number
 }
 
-type MessageTypes='list'|'trade_send'|'trade_recieve'
+type MessageTypes = 'conn' | 'list' | 'send' | 'recv'
 
-type Message<T>={
-    t:MessageTypes,
-    d:T
+type Messages = {
+    'conn': Message<ConnectDTO>,
+    'list': Message<WaresListDTO>
 }
 
-type WaresListDTO={
+type Message<T> = {
+    t: MessageTypes,
+    d: T
+}
+
+type ConnectDTO = {
+    /** 资源名 */
+    t: ResourceConstant
+}
+
+
+type WaresListDTO = {
     /** type-资源类型 */
-    t:string
+    t: string
     /** amount-资源数 */
-    a:number
+    a: number
     /** rules-规则 */
-    r:{
+    r: {
         /** id */
-        i:number,
-        /** raito */
-        r: [string, number, string, number]
+        i: string,
+        /** 交换物类型 */
+        t: ResourceConstant,
+        /** raito 保留4位小数 */
+        r: number
     }[]
 }
 

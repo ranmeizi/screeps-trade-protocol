@@ -26,6 +26,18 @@ global.test_log = () => {
     draw(Game.rooms['W59S17'], test_d)
 }
 
+const Logger = {
+    info(msg) {
+        console.log(msg)
+    },
+    success(msg) {
+        console.log(msg)
+    },
+    error(msg) {
+        console.log(msg)
+    }
+}
+
 /**
  * @typedef UIStyle
  * @property {number} [marginTop] default=0
@@ -147,7 +159,7 @@ function draw(room, data) {
             const { x, y } = root.addText({ fontSize: fontSize, marginLeft: 1 })
             draws.push(() => room.visual.text(line, x, y, { color: 'black', font: fontSize, align: 'left', strokeWidth: 0.5 }))
         }
-        root.addBox({ height: 1 })
+        root.addBox({ height: 0.5 })
     }
 
     // 轮廓
@@ -162,7 +174,7 @@ function draw(room, data) {
     const { x, y, height, width } = root.getPlaceholder()
 
     room.visual.rect(x, y, width, height, { fill: 'rgb(255,255,255)' })
-    draws.forEach(d=>d())
+    draws.forEach(d => d())
 }
 
 /**
@@ -176,7 +188,9 @@ const renderTexts = {
         ]
     },
     body(trade, d) {
-        return d.r.map(r => `id:${r.i}  ${r.r[1]} 【${r.r[0]}】 = ${r.r[3]} 【${r.r[2]}】   `)
+        return d.r.map(r => {
+            return `id:${r.i}  ${r.r[1]} 【${r.r[0]}】 = ${r.r[3]} 【${r.r[2]}】   `
+        })
     },
     footer(trade, d) {
         return [
@@ -187,23 +201,82 @@ const renderTexts = {
     }
 }
 
-function log(data) {
-    const header = renderTexts.header(test_trade, test_d)
-    const body = renderTexts.body(test_trade, test_d)
-    const footer = renderTexts.footer(test_trade, test_d)
+/**
+ * ~~卖方：计算total，保证给出的 total amount 一定可以发出去资源~~  
+ * 计算最大可传输资源
+ * @param {TradeTerminal} trade 
+ * @param {ResourceConstant} type 类型
+ * @param {number} amount 数量
+ */
+function calcMaxTransAmount(trade, type, amount) {
+    const terminal = trade.terminal
 
-    const text = header.concat(body).concat(footer).join('\n')
+    const distance = Game.map.getRoomLinearDistance(terminal.room.name, trade.memory.connection.roomName, true)
 
-    console.log(text)
+    let result = amount
+
+    const energy = terminal.store.getUsedCapacity(RESOURCE_ENERGY)
+
+    // 如果 type 是 energy 则单独计算
+    if (type === RESOURCE_ENERGY) {
+        result = Math.floor(energy / (2 - Math.exp(-distance / 30)))
+        return result
+    }
+
+    const cost = Math.ceil(amount * (1 - Math.exp(-distance / 30)))
+
+    // 运输费不够
+    if (cost > energy) {
+        // 减少 total amount
+        amount = Math.min(Math.ceil(energy / (1 - Math.exp(-distance / 30))))
+    }
+
+    return result
 }
 
 /**
- * 计算能量消耗
+ * 
+ * @param {TradeTerminal} trade 
+ * @param {WaresListDTO} listData 
  */
-function calcEnergy() {
+function calcTradeRangesByList(trade, listData) {
 
+    const amount = listData.a
+
+    const from = trade.terminal.room.name
+    const to = trade.memory.connection.roomName
+
+    const res = []
+
+    for (let r of listData.r) {
+        /**
+         * 这里讨论的是交换 listData.t 的 min / max 值
+         * 要保证买家利益，当发送资源按汇率计算是小数时进位凑整。
+         * a. 保证 发送/接收 资源 >= 1 , 求 最小交换资源 min
+         * b. 用 商品amount 和交换物amount * raito 计算max值
+         */
+        let min = r.r > 1 ? Math.ceil(r.r) : Math.floor(1 / r.r)
+        let max = Math.floor(calcMaxTransAmount(trade, r.t, Math.ceil(amount * r.r)) / r.r)
+        res.push({
+            min,
+            minCost: Game.market.calcTransactionCost(min, from, to),
+            max,
+            maxCost: Game.market.calcTransactionCost(max, from, to),
+        })
+    }
+
+    return res
 }
 
+global.topen = (room) => {
+    open(room)
+    select(room).memory.connection = {
+        roomName: 'W1N1'
+    }
+}
+global.tclose = close
+
+global.calcProviderAmount = () => calcMaxTransAmount(select('W54S21'), RESOURCE_ENERGY, select('W54S21').terminal.store.getUsedCapacity(RESOURCE_ENERGY))
 
 
 /**
@@ -287,17 +360,37 @@ function run() {
     }
 }
 
+function open(roomName) {
+    if (!!Memory[MEMORY_KEY].terminals[roomName]) {
+        return Logger.error(`${roomName}'s terminal is already open`)
+    }
+
+    Memory[MEMORY_KEY].terminals[roomName] = {
+        status: 'LISTEN',
+        status_tick: Game.time,
+        rules: [],
+        sendBuf: undefined,
+        connection: undefined
+    }
+}
+
+function close(roomName) {
+    if (!Memory[MEMORY_KEY].terminals[roomName]) {
+        return Logger.error(`${roomName}'s terminal is not open`)
+    }
+    delete Memory[MEMORY_KEY].terminals[roomName]
+}
+
 /**
  * 
  * @param {string} roomName 
  */
 function select(roomName) {
-    const terminal = Game.rooms[roomName].terminal
-    const memory = Memory[MEMORY_KEY].terminals[roomName]
-    return {
-        terminal,
-        memory
+    if (!Memory[MEMORY_KEY].terminals[roomName]) {
+        Logger.error(`${roomName}'s terminal is not open`)
+        return undefined
     }
+    return new TradeTerminal(roomName)
 }
 
 /**
@@ -311,6 +404,7 @@ function transStatus(memory, status) {
 }
 
 /**
+ * 每个状态的 handler
  * @type {Record<Status,(trade:TradeTerminal)=>void>}
  */
 const handlers = {
@@ -319,18 +413,29 @@ const handlers = {
         for (let i = 0; i < letestMessage.length; i++) {
             const transaction = letestMessage[i]
             if (!trade.memory.connection.roomName && transaction.to === trade.terminal.room.name) {
-                if (transaction.description.t === 'conn') {
-                    const resource = transaction.description.r
+                if (typeof transaction === 'object' && transaction.description.t === 'conn') {
+                    /** @type {Messages['conn']} */
+                    const message = transaction.description
+
+                    const resourceType = message.d.t
 
                     // 发送 rules 列表
-                    if (trade.sendRules(resource)) {
+                    if (trade.sendRules(resourceType)) {
                         // 消费掉
                         letestMessage.splice(i, 1)
+
+                        // 更新
+                        trade.memory.connection = {
+                            roomName: transaction.from,
+                            contract: undefined
+                        }
+
                         // 改变状态为 WAIT_SEND
                         transStatus(trade.memory, 'WAIT_SEND')
+                        // 定时器
+                        tradeFailTimer(trade, 10)
+                        break;
                     }
-
-
                 }
             }
         }
@@ -340,18 +445,28 @@ const handlers = {
         for (let transaction of letestMessage) {
             if (trade.memory.connection.roomName === transaction.from && transaction.to === trade.terminal.room.name) {
                 if (transaction.description.t === 'list') {
-                    const data = transaction.description.d
+                    /** @type {Messages['list']} */
+                    const message = transaction.description
+
+                    const data = message.d
 
                     // 画图
                     draw(Game.rooms[trade.terminal.room.name], data)
 
                     // 改变状态为 WAIT_TRADE
                     transStatus(trade.memory, 'WAIT_TRADE')
+
+                    // 定时
+                    tradeFailTimer(trade, 30)
                     break;
                 }
             }
         }
     },
+    /**
+     * 等待发起者在控制台输入脚本，开启交易
+     * 否则将被 30 tick 定时器状态置为 FAIL
+     */
     WAIT_TRADE(trade) {
         // 检查 sendBuf 有没有内容
         if (trade.memory.sendBuf) {
@@ -404,11 +519,15 @@ const handlers = {
     },
     FAIL(trade) {
         // 报错
+        Logger.error('Trade timeout')
         // 收尾
         this.COMPLETE(trade)
     }
 }
 
+/**
+ * 交易对象
+ */
 class TradeTerminal {
 
     // /**
@@ -425,26 +544,56 @@ class TradeTerminal {
     // memory
 
     constructor(roomName) {
-        const { terminal, memory } = select(roomName)
+        const terminal = Game.rooms[roomName].terminal
+        const memory = Memory[MEMORY_KEY].terminals[roomName]
 
         this.terminal = terminal
         this.memory = memory
     }
 
-    setRules() {
-        // 判断是否交易中 TODO
-        if (1 === 1) {
-            return
+    /**
+     * 
+     * @param {Rule[]} rules 
+     * @returns 
+     */
+    setRules(rules) {
+        // 判断是否交易中
+        if (this.memory.connection) {
+            return Logger.error(`There is a activating trade with ${this.memory.connection.roomName}`)
         }
+
+        // 更新
+        this.memory.rules = rules
+
+        // 成功
+        Logger.success('Set rule successful!')
+    }
+
+    _checkConnection() {
+        return !!this.memory.connection
     }
 
     /**
-     * 创建连接
+     * 创建连接,询问对应资源
      */
-    connect(roomName) {
-        this.terminal.send(RESOURCE_ENERGY, 1, roomName, JSON.stringify({
+    connect(roomName, resourceType) {
+        // 检查是否已有连接
+        if (this._checkConnection()) {
+            return Logger.error(`There is a activating trade with ${this.memory.connection.roomName}`)
+        }
 
-        }))
+        /** @type {Messages['conn']} */
+        const message = {
+            t: 'conn',
+            d: { t: resourceType }
+        }
+
+        this.terminal.send(RESOURCE_ENERGY, 1, roomName, JSON.stringify(message))
+
+        // 等待卖家发送资源列表
+        transStatus(this.memory, 'WAIT_LIST')
+        // 定时器
+        tradeFailTimer(this, 10)
     }
 
     /**
@@ -466,22 +615,40 @@ class TradeTerminal {
 
     /**
      * 注意 description 最多100字符
-     * 
-     * 多了是筛选掉嘛？
+     * 发送 商品列表 数据，若 没有resourceRules 或 amount<1 ,则结束
      */
-    sendRules(resourceType) {
+    sendRules(resourceType, onFail) {
         const roomName = this.memory.connection.roomName
-        const resourceRules = this.memory.rules.filter(item => item.type === resourceType)
+        const resourceRules = this.memory.rules.filter(item => item.resourceType === resourceType)
 
+        // 计算合适的amount
+        const amount = calcMaxTransAmount(this, resourceType, this.terminal.store.getUsedCapacity(resourceType))
+
+        /** @type {Messages['list']} */
         const message = {
             t: 'list',
-            d: resourceRules.map(item => ({
-                id: item.id,
-                r: item.raito,
-            }))
+            d: {
+                t: resourceType,
+                a: amount,
+                r: resourceRules.map(item => ({
+                    i: item.id,
+                    t: item.exchangeResourceType,
+                    r: item.raito
+                }))
+            }
         }
 
         const res = this.terminal.send(RESOURCE_ENERGY, 1, roomName, JSON.stringify(message))
+
+        if (amount < 1) {
+            // 余额不足
+            return false
+        }
+
+        if (resourceRules.length === 0) {
+            // 找不到商品
+            return false
+        }
 
         return res === OK
     }
@@ -509,6 +676,8 @@ class TradeTerminal {
 }
 
 module.exports = {
+    open,
+    close,
     select,
     TradeTerminal,
     run
