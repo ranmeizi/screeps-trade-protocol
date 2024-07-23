@@ -25,11 +25,12 @@ type Rule = {
     raito: number
 }
 
-type MessageTypes = 'conn' | 'list' | 'send' | 'recv'
+type MessageTypes = 'conn' | 'list' | 'send' | 'recv' | 'trade_send'
 
 type Messages = {
     'conn': Message<ConnectDTO>,
     'list': Message<WaresListDTO>
+    'trade_send': Message<{ id: string }>
 }
 
 type Message<T> = {
@@ -88,7 +89,17 @@ type TradeTerminalMemory = {
 
     connection?: {
         roomName: string,
+        /** 契约 调用 trade(id) 中 从 TrailBalance 中抽一个出来比较 amount */
         contract?: Contract
+        /** 契约试算 */
+        TrialBalance?: Record<string, {
+            minRecv: number,
+            maxRecv: number,
+            minSend: number,
+            maxSend: number
+            minSendCost: number,
+            maxSendCost: number
+        }>
     }
 }
 
