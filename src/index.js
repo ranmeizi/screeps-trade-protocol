@@ -1,31 +1,5 @@
 const MEMORY_KEY = 'custom_market'
 
-const test_d = {
-    t: RESOURCE_UTRIUM,
-    a: 2000,
-    r: [
-        { i: 1, r: [RESOURCE_UTRIUM, 1, RESOURCE_OXYGEN, 1] },
-        { i: 2, r: [RESOURCE_UTRIUM, 5, RESOURCE_HYDROGEN, 14] }
-    ]
-}
-const test_trade = {
-    memory: {
-        connection: {
-            roomName: 'W10N5'
-        }
-    },
-    terminal: {
-        room: {
-            name: 'W0N0'
-        }
-    }
-}
-
-global.test_log = () => {
-    // log(test_d)
-    draw(Game.rooms['W59S17'], test_d)
-}
-
 const Logger = {
     info(msg) {
         console.log(msg)
@@ -249,19 +223,37 @@ function calcTradeRangesByList(trade, listData) {
     const res = []
 
     for (let r of listData.r) {
-        /**
-         * 这里讨论的是交换 listData.t 的 min / max 值
-         * 要保证买家利益，当发送资源按汇率计算是小数时进位凑整。
-         * a. 保证 发送/接收 资源 >= 1 , 求 最小交换资源 min
-         * b. 用 商品amount 和交换物amount * raito 计算max值
-         */
-        let min = r.r > 1 ? Math.ceil(r.r) : Math.floor(1 / r.r)
-        let max = Math.floor(calcMaxTransAmount(trade, r.t, Math.ceil(amount * r.r)) / r.r)
+
+        // 计算最大可发送的交换物 maxSend
+
+        /** 不计算发送损耗的最大值 */
+        const maxPureAmount = Math.min(trade.terminal.store.getUsedCapacity(r.t), Math.ceil(amount * r.r))
+
+        /** 计算损耗的最大值 maxSend */
+        const maxSend = Math.ceil(calcMaxTransAmount(trade, r.t, maxPureAmount))
+
+        // 交换商品资源的最大值 为 0 则无法交易 maxRecv 
+        const maxRecv = Math.floor(maxSend / r.r)
+
+        // 满足 交换资源必须 >1 的最小值 与 交换商品资源的最大值 比较取最小 minRecv
+        const minRecv = Math.min(r.r > 1 ? 1 : Math.floor(1 / r.r), maxRecv)
+
+        // minRecv 计算 minSend
+        const minSend = Math.ceil(minRecv * r.r)
+
+        // 使用 minSend maxSend 计算 minSendCost maxSendCost
+
+        const minSendCost = Game.market.calcTransactionCost(minSend, from, to)
+        const maxSendCost = Game.market.calcTransactionCost(maxSend, from, to)
+
+
         res.push({
-            min,
-            minCost: Game.market.calcTransactionCost(min, from, to),
-            max,
-            maxCost: Game.market.calcTransactionCost(max, from, to),
+            minRecv,
+            maxRecv,
+            minSend,
+            maxSend,
+            minSendCost,
+            maxSendCost
         })
     }
 
@@ -680,5 +672,9 @@ module.exports = {
     close,
     select,
     TradeTerminal,
-    run
+    run,
+    TFn: {
+        calcMaxTransAmount,
+        calcTradeRangesByList
+    }
 }
