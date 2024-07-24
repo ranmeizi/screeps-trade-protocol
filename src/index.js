@@ -326,7 +326,50 @@ function checkMemory() {
     }
 }
 
-function createContract(trade, rule) {
+/**
+ * 创建契约
+ * @param {TradeTerminal} trade 
+ * @param {string} id 
+ * @param {number} amount 
+ * @returns {Contract} 
+ */
+function createContractSend(trade, id, amount) {
+    const wares = trade.memory.connection.wares
+    const recieveType = wares.t
+    const recieveAmount = amount
+    const rule = wares.r.find(item => item.i = id)
+    const sendType = rule.t
+    const sendAmount = Math.ceil(rule.r * amount)
+
+    return {
+        sendType,
+        sendAmount,
+        recieveType,
+        recieveAmount
+    }
+}
+
+/**
+ * 
+ * @param {TradeTerminal} trade 
+ * @param {*} id 
+ * @param {*} amount 
+ */
+function createContractRecieve(trade, id, amount) {
+    const rule = trade.memory.rules.find(item => item.id === id)
+
+    const recieveType = rule.resourceType
+    const recieveAmount = amount
+
+    const sendType = rule.exchangeResourceType
+    const sendAmount = Math.ceil(rule.raito * amount)
+
+    return {
+        sendType,
+        sendAmount,
+        recieveType,
+        recieveAmount
+    }
 
 }
 
@@ -454,7 +497,7 @@ const handlers = {
                         // 改变状态为 WAIT_SEND
                         transStatus(trade.memory, 'WAIT_SEND')
                         // 定时器
-                        tradeFailTimer(trade, 10)
+                        tradeFailTimer(trade, 35)
                         break;
                     }
                 }
@@ -470,6 +513,9 @@ const handlers = {
                     const message = transaction.description
 
                     const data = message.d
+
+                    // 保存
+                    trade.memory.connection.wares = data
 
                     // 画图
                     draw(trade, data)
@@ -512,16 +558,21 @@ const handlers = {
                     /** @type {Messages['trade_send']} */
                     const message = transaction.description
 
-                    // 发资源吧
-                    if (trade.doRecieveResource()) {
+                    // 本地创建 contract
+                    const contract = createContractRecieve(trade, message.d.i, message.d.a)
 
+                    // 发资源吧
+                    if (trade.doRecieveResource(contract)) {
                         // 改变状态为 
                         transStatus(trade.memory, 'COMPLETE')
                         break;
+                    } else {
+                        transStatus(trade.memory, 'FAIL')
                     }
                 }
             }
         }
+        // 如果有的话，在 timeout 之前继续
     },
     WAIT_RECIEVE(trade) {
         // 等待交易单信息中的 list 数据 画图
@@ -587,7 +638,12 @@ class TradeTerminal {
         }
 
         // 更新
-        this.memory.rules = rules
+        this.memory.rules = rules.map(item => {
+            return {
+                ...item,
+                id: _.uniqueId()
+            }
+        })
 
         // 成功
         Logger.success('Set rule successful!')
@@ -612,10 +668,11 @@ class TradeTerminal {
             d: { t: resourceType }
         }
 
-        this.terminal.send(RESOURCE_ENERGY, 1, roomName, JSON.stringify(message))
+        if (this.terminal.send(RESOURCE_ENERGY, 1, roomName, JSON.stringify(message)) === OK) {
+            // 等待卖家发送资源列表
+            transStatus(this.memory, 'WAIT_LIST')
+        }
 
-        // 等待卖家发送资源列表
-        transStatus(this.memory, 'WAIT_LIST')
         // 定时器
         tradeFailTimer(this, 10)
     }
@@ -636,12 +693,15 @@ class TradeTerminal {
             if (amount < range.minRecv || amount > range.maxRecv) {
                 return Logger.error('trade fail, invalid amount')
             }
+            // 创建契约
+            this.memory.connection.contract = createContractSend(this, id, amount)
 
             // 发送
             const message = {
                 t: 'trade_send',
-                d: { id }
+                d: { i: id, a: amount }
             }
+
             this.memory.sendBuf = JSON.stringify(message)
         } else {
             // 你在干森么？
@@ -653,7 +713,7 @@ class TradeTerminal {
      * 注意 description 最多100字符
      * 发送 商品列表 数据，若 没有resourceRules 或 amount<1 ,则结束
      */
-    sendRules(resourceType, onFail) {
+    sendRules(resourceType) {
         const roomName = this.memory.connection.roomName
         const resourceRules = this.memory.rules.filter(item => item.resourceType === resourceType)
 
@@ -694,18 +754,29 @@ class TradeTerminal {
         const roomName = this.memory.connection.roomName
         const sendBuf = this.memory.sendBuf
 
-        // 翻 rules
-        const res = this.terminal.send(RESOURCE_ENERGY, 1, roomName, sendBuf)
+        const contract = this.memory.connection.contract
+
+        // 发送
+        const res = this.terminal.send(contract.sendType, contract.sendAmount, roomName, sendBuf)
 
         return res === OK
     }
 
-    // TODO
-    doRecieveResource() {
+    /**
+     * @param {Contract} contract 
+     * @returns 
+     */
+    doRecieveResource(contract) {
         const roomName = this.memory.connection.roomName
 
-        // 翻 rules
-        const res = this.terminal.send(RESOURCE_ENERGY, 1, roomName)
+        /** @type {Messages['trade_recieve']} */
+        const message = {
+            t: 'trade_recieve',
+            d: {}
+        }
+
+        // 发送
+        const res = this.terminal.send(contract.recieveType, contract.recieveAmount, roomName, JSON.stringify(message))
 
         return res === OK
     }

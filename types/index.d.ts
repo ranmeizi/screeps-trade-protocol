@@ -14,7 +14,7 @@ type Trade = {
 type Status = 'LISTEN' | 'WAIT_LIST' | 'WAIT_TRADE' | 'WAIT_SEND' | 'WAIT_RECIEVE' | 'COMPLETE' | 'FAIL'
 
 type Rule = {
-    id: '',
+    id: string,
     /** 商品类型 */
     resourceType: ResourceConstant,
     /** 交换物类型 */
@@ -25,12 +25,13 @@ type Rule = {
     raito: number
 }
 
-type MessageTypes = 'conn' | 'list' | 'send' | 'recv' | 'trade_send'
+type MessageTypes = 'conn' | 'list' | 'trade_send' | 'trade_recieve'
 
 type Messages = {
     'conn': Message<ConnectDTO>,
     'list': Message<WaresListDTO>
-    'trade_send': Message<{ id: string }>
+    'trade_send': Message<{ i: string, a: string }>
+    'trade_recieve': Message<{}>
 }
 
 type Message<T> = {
@@ -46,7 +47,7 @@ type ConnectDTO = {
 
 type WaresListDTO = {
     /** type-资源类型 */
-    t: string
+    t: ResourceConstant
     /** amount-资源数 */
     a: number
     /** rules-规则 */
@@ -62,9 +63,9 @@ type WaresListDTO = {
 
 /** 交易合同 */
 type Contract = {
-    sendType: string,
+    sendType: ResourceConstant,
     sendAmount: number,
-    recieveType: string,
+    recieveType: ResourceConstant,
     recieveAmount: number
 }
 
@@ -100,6 +101,7 @@ type TradeTerminalMemory = {
             minSendCost: number,
             maxSendCost: number
         }>
+        wares?: WaresListDTO
     }
 }
 
