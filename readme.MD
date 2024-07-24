@@ -10,14 +10,15 @@ This protocol is specifically designed to serve players' private terminal transa
 
 ## usage
 
-1. copy the ```src/index.js``` and rename it in your code.
+1. copy the ```src/index.js``` and rename it in your code like ```screeps_trade_protocol```.
 
 2. add "run()" function in your loop, to listen incomming message.
 
 ```js
 // main.js
-const STP = require('screeps-trade-protocol.js')
-global.STP=STP
+const STP = require('screeps_trade_protocol')
+
+global.STP=STP // set global api
 
 module.export.loop=()=>{
     ...
@@ -27,7 +28,7 @@ module.export.loop=()=>{
 
 ```
 
-3. call open to start trade
+3. call open to start marketing
 
 ```STP.open("W1S1")```
 

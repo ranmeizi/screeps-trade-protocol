@@ -105,7 +105,7 @@ function draw(trade, data) {
     const draws = []
 
     // 给买方看的一些数据
-    const calcList = calcTradeRangesByList(trade, data)
+    const TrialBalance = trade.memory.connection.TrialBalance
 
     function drawHeader() {
         const header = renderTexts.header(trade, data)
@@ -131,9 +131,9 @@ function draw(trade, data) {
                 maxSend,
                 minSendCost,
                 maxSendCost
-            } = calcList[i]
+            } = TrialBalance[data.r[i].i]
             const fontSize = 1
-            const { x, y } = root.addText({ fontSize: fontSize, marginLeft: 1, marginBottom: 1 })
+            const { x, y } = root.addText({ fontSize: fontSize, marginLeft: 1 })
 
             draws.push(() => room.visual.text(line, x, y, { color: 'black', font: fontSize, align: 'left', strokeWidth: 0.5 }))
 
@@ -143,13 +143,15 @@ function draw(trade, data) {
             // 判断可不可交易
             if (minRecv === 0) {
                 // 不可交易
-                right = `can't exchange [${recvType}] with [${sendType}]`
-                draws.push(() => room.visual.text(right, x + 8, y, { color: 'black', font: fontSize, align: 'left', strokeWidth: 0.5 }))
+                right = `can't exchange 「${recvType}」 with 「${sendType}」`
+                draws.push(() => room.visual.text(right, x + 12, y, { color: 'black', font: 0.8, align: 'left', strokeWidth: 0.5 }))
             } else {
-                right = `exchange range: ${minRecv}[${recvType}] ~ ${maxRecv}[${recvType}]`
-                draws.push(() => room.visual.text(right, x + 8, y, { color: 'black', font: fontSize, align: 'left', strokeWidth: 0.5 }))
-                let footer = `cost range: ${minSend}[${sendType}] ~ ${maxSend}[${sendType}]  and ${minSendCost}[${RESOURCE_ENERGY}] ~ ${maxSendCost}[${RESOURCE_ENERGY}]`
-                draws.push(() => room.visual.text(footer, x + 2, y + 0.8, { color: 'red', font: fontSize, align: 'left', strokeWidth: 0.5 }))
+                let footer1 = `exchange range: ${minRecv} 「${recvType}」 ~ ${maxRecv} 「${recvType}」`
+                let line1 = root.addText({ fontSize: 0.6, marginLeft: 1 })
+                draws.push(() => room.visual.text(footer1, line1.x, line1.y, { color: 'black', font: 0.6, align: 'left', strokeWidth: 0.5 }))
+                let footer2 = `cost range: ${minSend} 「${sendType}」 ~ ${maxSend} 「${sendType}」  and   ${minSendCost} 「${RESOURCE_ENERGY}」 ~ ${maxSendCost} 「${RESOURCE_ENERGY}」`
+                let line2 = root.addText({ fontSize: 0.6, marginLeft: 1 })
+                draws.push(() => room.visual.text(footer2, line2.x, line2.y, { color: 'red', font: 0.6, align: 'left', strokeWidth: 0.5 }))
             }
         }
         root.addBox({ height: 2.5 })
@@ -199,7 +201,7 @@ const renderTexts = {
         return [
             'Check this list and execute the script in Console',
             `STP.select("${trade.terminal.room.name}").trade("{id}",{amount})`,
-            `expire in ${Game.time - trade.memory.status_tick} tick`
+            `expire in ${35-(Game.time - trade.memory.status_tick)} tick`
         ]
     }
 }
@@ -249,7 +251,8 @@ function calcTradeRangesByList(trade, listData) {
     const from = trade.terminal.room.name
     const to = trade.memory.connection.roomName
 
-    const res = []
+    /** @type {TradeTerminalMemory['connection']['TrialBalance']} */
+    const res = {}
 
     for (let r of listData.r) {
 
@@ -275,15 +278,14 @@ function calcTradeRangesByList(trade, listData) {
         const minSendCost = Game.market.calcTransactionCost(minSend, from, to)
         const maxSendCost = Game.market.calcTransactionCost(maxSend, from, to)
 
-
-        res.push({
+        res[r.i]={
             minRecv,
             maxRecv,
             minSend,
             maxSend,
             minSendCost,
             maxSendCost
-        })
+        }
     }
 
     return res
@@ -306,7 +308,7 @@ global.calcProviderAmount = () => calcMaxTransAmount(select('W54S21'), RESOURCE_
  * @param {number} tickTimeout 
  */
 function tradeFailTimer(trade, tickTimeout) {
-    if (trade.memory.status_tick + tickTimeout >= Game.time) {
+    if (trade.memory.status_tick + tickTimeout < Game.time) {
         // 结束
         transStatus(trade.memory, 'FAIL')
         // log timeout
@@ -476,28 +478,29 @@ const handlers = {
         // 等待交易单信息
         for (let i = 0; i < letestMessage.length; i++) {
             const transaction = letestMessage[i]
-            if (!trade.memory.connection.roomName && transaction.to === trade.terminal.room.name) {
+            if (!trade.memory.connection && transaction.to === trade.terminal.room.name) {
                 if (typeof transaction === 'object' && transaction.description.t === 'conn') {
                     /** @type {Messages['conn']} */
                     const message = transaction.description
 
                     const resourceType = message.d.t
 
+                    // 更新
+                    trade.memory.connection = {
+                        roomName: transaction.from,
+                        contract: undefined
+                    }
+
+
                     // 发送 rules 列表
                     if (trade.sendRules(resourceType)) {
                         // 消费掉
                         letestMessage.splice(i, 1)
 
-                        // 更新
-                        trade.memory.connection = {
-                            roomName: transaction.from,
-                            contract: undefined
-                        }
 
                         // 改变状态为 WAIT_SEND
                         transStatus(trade.memory, 'WAIT_SEND')
-                        // 定时器
-                        tradeFailTimer(trade, 35)
+                        
                         break;
                     }
                 }
@@ -506,7 +509,8 @@ const handlers = {
     },
     WAIT_LIST(trade) {
         // 等待交易单信息中的 list 数据 画图
-        for (let transaction of letestMessage) {
+        for (let i = 0; i < letestMessage.length; i++) {
+            const transaction = letestMessage[i]
             if (trade.memory.connection.roomName === transaction.from && transaction.to === trade.terminal.room.name) {
                 if (transaction.description.t === 'list') {
                     /** @type {Messages['list']} */
@@ -517,24 +521,30 @@ const handlers = {
                     // 保存
                     trade.memory.connection.wares = data
 
-                    // 画图
-                    draw(trade, data)
+                    // 试算
+                    trade.memory.connection.TrialBalance = calcTradeRangesByList(trade, data)
+
+                    // 消费掉
+                    letestMessage.splice(i, 1)
 
                     // 改变状态为 WAIT_TRADE
                     transStatus(trade.memory, 'WAIT_TRADE')
 
-                    // 定时
-                    tradeFailTimer(trade, 30)
                     break;
                 }
             }
         }
+        // 定时
+        tradeFailTimer(trade, 11)
     },
     /**
      * 等待发起者在控制台输入脚本，开启交易
      * 否则将被 30 tick 定时器状态置为 FAIL
      */
     WAIT_TRADE(trade) {
+        const data = trade.memory.connection.wares
+        // 画图
+        draw(trade, data)
         // 检查 sendBuf 有没有内容
         if (trade.memory.sendBuf) {
             // 发送
@@ -547,6 +557,8 @@ const handlers = {
                 transStatus(trade.memory, 'WAIT_RECIEVE')
             }
         }
+        // 定时
+        tradeFailTimer(trade, 35)
     },
     WAIT_SEND(trade) {
         // 等待交易单信息中的 list 数据 画图
@@ -554,6 +566,9 @@ const handlers = {
             const transaction = letestMessage[i]
             if (trade.memory.connection.roomName === transaction.from && transaction.to === trade.terminal.room.name) {
                 if (transaction.description.t === 'trade_send') {
+
+                    // 消费掉
+                    letestMessage.splice(i, 1)
 
                     /** @type {Messages['trade_send']} */
                     const message = transaction.description
@@ -573,6 +588,9 @@ const handlers = {
             }
         }
         // 如果有的话，在 timeout 之前继续
+
+        // 定时器
+        tradeFailTimer(trade, 35)
     },
     WAIT_RECIEVE(trade) {
         // 等待交易单信息中的 list 数据 画图
@@ -581,11 +599,14 @@ const handlers = {
                 if (transaction.description.t === 'trade_recieve') {
                     // 检查一下资源，是不是要报警
 
+
                     // 改变状态为 COMPLETE
                     transStatus(trade.memory, 'COMPLETE')
                 }
             }
         }
+        // 定时器
+        tradeFailTimer(trade, 11)
     },
     COMPLETE(trade) {
         // 收尾
@@ -596,7 +617,7 @@ const handlers = {
         // 报错
         Logger.error('Trade timeout')
         // 收尾
-        this.COMPLETE(trade)
+        handlers.COMPLETE(trade)
     }
 }
 
@@ -670,6 +691,12 @@ class TradeTerminal {
 
         if (this.terminal.send(RESOURCE_ENERGY, 1, roomName, JSON.stringify(message)) === OK) {
             // 等待卖家发送资源列表
+            // 更新
+            this.memory.connection = {
+                roomName: roomName,
+                contract: undefined
+            }
+
             transStatus(this.memory, 'WAIT_LIST')
         }
 
@@ -714,6 +741,9 @@ class TradeTerminal {
      * 发送 商品列表 数据，若 没有resourceRules 或 amount<1 ,则结束
      */
     sendRules(resourceType) {
+        if (!this.memory.connection) {
+            return
+        }
         const roomName = this.memory.connection.roomName
         const resourceRules = this.memory.rules.filter(item => item.resourceType === resourceType)
 
