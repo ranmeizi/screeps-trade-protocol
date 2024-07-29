@@ -1,18 +1,18 @@
 # screeps-trade-protocol
 
-A screeps room terminal protocol of resource trade
+一个用于《Screeps》游戏 room 间交换资源的协议
 
-language: [EN](readme.MD) | [中文](readme-zh.MD)
+语言: [en](readme-en.MD) | [中文](readme.MD)
 
 ----
 
-This protocol is specifically designed to serve players' private terminal transactions. Sellers set their own exchange rules, and buyers can use the protocol to exchange resources according to the rules set by even throgh the seller is offline.
+这个协议为了玩家方便私下使用terminal进行交易。卖家设置好交换的规则，买家可以使用协议去按照规则交换这些资源，即使卖家离线，也可以完成这次交易。
 
-## usage
+## 使用方法
 
-1. copy the ```src/index.js``` and rename it in your code like ```screeps_trade_protocol```.
+1. 复制并重命名 ```src/index.js``` 例如 ```screeps_trade_protocol```. 然后放到你的代码里
 
-2. add "run()" function in your loop, to listen incomming message.
+2. 在loop循环中调用 run 函数去监听 incomming message
 
 ```js
 // main.js
@@ -28,24 +28,61 @@ module.export.loop=()=>{
 
 ```
 
-3. call open to start marketing
+3. 调用open函数开市
 
 ```STP.open("W1S1")```
 
-4. as a buyer to start a trade
+4. 卖家设置交易规则
 
-connect terminal
-```STP.select("W1S1").connect("W2S2",RESOURCE_GHODIUM) // you are tring buy some G in W2S2 ```
+```ts
+type Rule = {
+    id?: string,
+    /** 商品类型 */
+    resourceType: ResourceConstant,
+    /** 交换物类型 */
+    exchangeResourceType: ResourceConstant,
+    /** 汇率 */
+    raito: number
+}
 
-read saler's rules list,and select one if you want
+```
 
-exec the script in Console
+创建一个设置规则的函数，并调用他1次
+
+```
+
+global.setRuleInW1S1=setRuleInW1S1
+
+function setRuleInW1S1(){
+    
+    const rules=[
+        {
+            resourceType: RESOURCE_ENERGY,
+            exchangeResourceType: RESOURCE_KEANIUM,
+            raito: 0.05
+        },
+        {
+            resourceType: RESOURCE_ZYNTHIUM,
+            exchangeResourceType: RESOURCE_KEANIUM,
+            raito: 1
+        }
+    ]
+    
+    STP.select('W1S1').setRules(rules)
+}
+```
+
+5. 卖家调用 connect 发起交易
+
+链接终端
+```STP.select("W1S1").connect("W2S2",RESOURCE_ZYNTHIUM) // 尝试在 W2S2 房间买一些 Z ```
+
+之后你对应房间的 RoomVisual 会弹出一个对应资源卖家的交换规则卡片
+
+![rules](assets/card.jpg)
+
+阅读卖家交易规则，并选择一个你想要交换的规则
+
+执行这条脚本，并确保你的 amount 在交易范围内
 
 ```STP.select("W1S1").trade("{id}",{amount})```
-
-
-5. as a saler to set trade rules
-
-```2```
-
-## apis

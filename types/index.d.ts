@@ -14,7 +14,7 @@ type Trade = {
 type Status = 'LISTEN' | 'WAIT_LIST' | 'WAIT_TRADE' | 'WAIT_SEND' | 'WAIT_RECIEVE' | 'COMPLETE' | 'FAIL'
 
 type Rule = {
-    id: string,
+    id?: string,
     /** 商品类型 */
     resourceType: ResourceConstant,
     /** 交换物类型 */

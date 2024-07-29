@@ -479,7 +479,7 @@ const handlers = {
         for (let i = 0; i < letestMessage.length; i++) {
             const transaction = letestMessage[i]
             if (!trade.memory.connection && transaction.to === trade.terminal.room.name) {
-                if (typeof transaction === 'object' && transaction.description.t === 'conn') {
+                if (typeof transaction.description === 'object' && transaction.description.t === 'conn') {
                     /** @type {Messages['conn']} */
                     const message = transaction.description
 
@@ -512,7 +512,7 @@ const handlers = {
         for (let i = 0; i < letestMessage.length; i++) {
             const transaction = letestMessage[i]
             if (trade.memory.connection.roomName === transaction.from && transaction.to === trade.terminal.room.name) {
-                if (transaction.description.t === 'list') {
+                if (typeof transaction.description === 'object' && transaction.description.t === 'list') {
                     /** @type {Messages['list']} */
                     const message = transaction.description
 
@@ -565,7 +565,7 @@ const handlers = {
         for (let i = 0; i < letestMessage.length; i++) {
             const transaction = letestMessage[i]
             if (trade.memory.connection.roomName === transaction.from && transaction.to === trade.terminal.room.name) {
-                if (transaction.description.t === 'trade_send') {
+                if (typeof transaction.description === 'object' && transaction.description.t === 'trade_send') {
 
                     // 消费掉
                     letestMessage.splice(i, 1)
@@ -596,7 +596,7 @@ const handlers = {
         // 等待交易单信息中的 list 数据 画图
         for (let transaction of letestMessage) {
             if (trade.memory.connection.roomName === transaction.from && transaction.to === trade.terminal.room.name) {
-                if (transaction.description.t === 'trade_recieve') {
+                if (typeof transaction.description === 'object' && transaction.description.t === 'trade_recieve') {
                     // 检查一下资源，是不是要报警
 
 
